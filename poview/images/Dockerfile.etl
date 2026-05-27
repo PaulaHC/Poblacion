@@ -1,0 +1,18 @@
+FROM python:3.12-slim
+
+# Cron para ejecuciones periódicas
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends cron \
+ && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /etl
+
+COPY etl/requirements.txt /etl/requirements.txt
+RUN pip install --no-cache-dir -r /etl/requirements.txt
+
+COPY etl/ /etl/
+COPY etl/conf/run.sh /etl/conf/run.sh
+RUN chmod +x /etl/conf/run.sh
+
+# Logs van a stdout/stderr (capturados por Docker con rotación)
+ENTRYPOINT ["/etl/conf/run.sh"]

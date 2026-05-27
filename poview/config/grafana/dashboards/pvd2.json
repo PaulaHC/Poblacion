@@ -1,0 +1,339 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 8,
+        "x": 0,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "basemap": {
+          "config": {},
+          "name": "Layer 0",
+          "noRepeat": false,
+          "type": "default"
+        },
+        "controls": {
+          "mouseWheelZoom": true,
+          "showAttribution": true,
+          "showDebug": false,
+          "showMeasure": false,
+          "showScale": false,
+          "showZoom": false
+        },
+        "layers": [
+          {
+            "config": {
+              "rules": [],
+              "src": "https://opendata.sitcan.es/upload/unidades-administrativas/gobcan_unidades-administrativas_municipios.geojson",
+              "style": {
+                "color": {
+                  "fixed": "dark-green"
+                },
+                "opacity": 0.8,
+                "rotation": {
+                  "fixed": 0,
+                  "max": 360,
+                  "min": -360,
+                  "mode": "mod"
+                },
+                "size": {
+                  "fixed": 5,
+                  "max": 15,
+                  "min": 2
+                },
+                "symbol": {
+                  "fixed": "img/icons/marker/circle.svg",
+                  "mode": "fixed"
+                },
+                "symbolAlign": {
+                  "horizontal": "center",
+                  "vertical": "center"
+                },
+                "textConfig": {
+                  "fontSize": 12,
+                  "offsetX": 0,
+                  "offsetY": 0,
+                  "textAlign": "center",
+                  "textBaseline": "middle"
+                }
+              }
+            },
+            "name": "Layer 1",
+            "tooltip": true,
+            "type": "geojson"
+          }
+        ],
+        "tooltip": {
+          "mode": "details"
+        },
+        "view": {
+          "allLayers": true,
+          "id": "coords",
+          "lat": 40,
+          "lon": -3,
+          "noRepeat": false,
+          "zoom": 5.25
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "query": "",
+          "refId": "A"
+        }
+      ],
+      "title": "Poblacion Española",
+      "type": "geomap"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "log"
+            },
+            "showPoints": "auto",
+            "showValues": false,
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 8,
+        "x": 16,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "legend": {
+          "calcs": [
+            "min"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.4.2",
+      "targets": [
+        {
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "import \"regexp\"\r\n\r\nmunicipiosRegex = \"^(\" + regexp.quoteMeta(v: \"${municipio:pipe}\") + \")$\"\r\n\r\nfrom(bucket: \"poblacion_municipios\")\r\n  |> range(start: 1996-01-01T00:00:00Z)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\" \r\n                    and r.subgrupo == \"municipios\" \r\n                    and r.sexo == \"Total\"\r\n                    and r._field == \"valor\"\r\n                    and r.municipio =~ /^${municipio:pipe}$/)\r\n  |> keep(columns: [\"_time\", \"_value\", \"municipio\"])\r\n  |> group(columns: [\"municipio\"])",
+          "refId": "A"
+        }
+      ],
+      "title": "Evoluvión poblacion por municipios",
+      "type": "timeseries"
+    }
+  ],
+  "preload": false,
+  "refresh": "1h",
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "Castilla y León",
+          "value": "Castilla y León"
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "influxdb"
+        },
+        "definition": "from(bucket: \"poblacion_municipios\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\")\r\n  |> keep(columns: [\"comunidad\"])\r\n  |> distinct(column: \"comunidad\")\r\n  |> yield()",
+        "label": "Comunidad",
+        "name": "comunidad",
+        "options": [],
+        "query": {
+          "query": "from(bucket: \"poblacion_municipios\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\")\r\n  |> keep(columns: [\"comunidad\"])\r\n  |> distinct(column: \"comunidad\")\r\n  |> yield()"
+        },
+        "refresh": 2,
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "Valladolid",
+          "value": "Valladolid"
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "influxdb"
+        },
+        "definition": "from(bucket: \"poblacion_municipios\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\")\r\n  |> filter(fn: (r) => r.comunidad == \"${comunidad}\")\r\n  |> keep(columns: [\"cod_provincia\",\"provincia\"])\r\n  |> distinct(column: \"provincia\")\r\n  |> yield()",
+        "label": "Provincia ",
+        "name": "provincia",
+        "options": [],
+        "query": {
+          "query": "from(bucket: \"poblacion_municipios\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\")\r\n  |> filter(fn: (r) => r.comunidad == \"${comunidad}\")\r\n  |> keep(columns: [\"cod_provincia\",\"provincia\"])\r\n  |> distinct(column: \"provincia\")\r\n  |> yield()"
+        },
+        "refresh": 2,
+        "regex": "",
+        "regexApplyTo": "value",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": [
+            "Valladolid",
+            "Laguna de Duero",
+            "Medina de Rioseco"
+          ],
+          "value": [
+            "Valladolid",
+            "Laguna de Duero",
+            "Medina de Rioseco"
+          ]
+        },
+        "datasource": {
+          "type": "influxdb",
+          "uid": "influxdb"
+        },
+        "definition": "from(bucket: \"poblacion_municipios\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\")\r\n  |> filter(fn: (r) => r.provincia == \"${provincia}\")\r\n  |> keep(columns: [\"cod_municipio\",\"municipio\"])\r\n  |> distinct(column: \"municipio\")\r\n  |> yield()",
+        "includeAll": true,
+        "label": "Municipio",
+        "multi": true,
+        "name": "municipio",
+        "options": [],
+        "query": {
+          "query": "from(bucket: \"poblacion_municipios\")\r\n  |> range(start: 0)\r\n  |> filter(fn: (r) => r._measurement == \"ine_stats\")\r\n  |> filter(fn: (r) => r.provincia == \"${provincia}\")\r\n  |> keep(columns: [\"cod_municipio\",\"municipio\"])\r\n  |> distinct(column: \"municipio\")\r\n  |> yield()"
+        },
+        "refresh": 1,
+        "regex": "",
+        "regexApplyTo": "value",
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "2012-04-16T19:18:27.692Z",
+    "to": "2024-12-31T23:00:00.000Z"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "DEMOGRAFIA-V2",
+  "uid": "pombrzt",
+  "version": 1,
+  "weekStart": "monday"
+}
