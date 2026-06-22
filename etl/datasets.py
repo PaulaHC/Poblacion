@@ -15,7 +15,7 @@ PROVINCIAS: dict[str, tuple[str, str, str]] = {
     "14": ("Córdoba",                  "Andalucía",                 "AND"),
     "15": ("La Coruña",                "Galicia",                   "GAL"),
     "16": ("Cuenca",                   "Castilla-La Mancha",        "CLM"),
-    "17": ("Gerona",                   "Catalunya",                 "CAT"),
+    "17": ("Gerona",                   "Cataluña",                 "CAT"),
     "18": ("Granada",                  "Andalucía",                 "AND"),
     "19": ("Guadalajara",              "Castilla-La Mancha",        "CLM"),
     "20": ("Guipúzcoa",                "País Vasco",                "PV"),
@@ -23,7 +23,7 @@ PROVINCIAS: dict[str, tuple[str, str, str]] = {
     "22": ("Huesca",                   "Aragón",                    "ARA"),
     "23": ("Jaén",                     "Andalucía",                 "AND"),
     "24": ("León",                     "Castilla y León",           "CyL"),
-    "25": ("Lérida",                   "Catalunya",                 "CAT"),
+    "25": ("Lérida",                   "Cataluña",                 "CAT"),
     "26": ("La Rioja",                 "La Rioja",                  "LR"),
     "27": ("Lugo",                     "Galicia",                   "GAL"),
     "28": ("Madrid",                   "Comunidad de Madrid",       "MAD"),
@@ -41,7 +41,7 @@ PROVINCIAS: dict[str, tuple[str, str, str]] = {
     "40": ("Segovia",                  "Castilla y León",           "CyL"),
     "41": ("Sevilla",                  "Andalucía",                 "AND"),
     "42": ("Soria",                    "Castilla y León",           "CyL"),
-    "43": ("Tarragona",                "Catalunya",                 "CAT"),
+    "43": ("Tarragona",                "Cataluña",                 "CAT"),
     "44": ("Teruel",                   "Aragón",                    "ARA"),
     "45": ("Toledo",                   "Castilla-La Mancha",        "CLM"),
     "46": ("Valencia",                 "Comunitat Valenciana",      "CV"),
@@ -52,6 +52,8 @@ PROVINCIAS: dict[str, tuple[str, str, str]] = {
     "51": ("Ceuta",                    "Ceuta",  "CEU"),
     "52": ("Melilla",                  "Melilla", "MEL"),
 }
+
+
 
 DATASETS = {
     "poblacion": {
@@ -91,6 +93,6 @@ DATASETS = {
         #   76312 → municipios 50-500 hab (sin grupo_edad)
         "estadoCivil": ["76306", "76312"],
         # Renta por hogar por municipio (sin sexo ni edad):
-        "renta": ["31097"],
+        "renta": ["53689"],
     }
 }

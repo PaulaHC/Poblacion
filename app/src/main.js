@@ -14,14 +14,14 @@ import { mountViewSwitcher } from './components/view-switcher.js';
 import { mountCharts }       from './components/charts.js';
 import { mountStats }        from './components/stats.js';
 import { createMap }         from './map/map.js';
+import { mountLayers }       from './map/layers.js';
 
 function boot() {
-  // Cada montaje se aísla con su try/catch para que un fallo
-  // en una vista no rompa todo (el síntoma anterior fue justo este).
   safeMount('filters',  () => mountFilters().catch(e => console.error('[filters]', e)));
 
   let map = null;
   safeMount('map',      () => { map = createMap(document.getElementById('map')); });
+  safeMount('layers',   () => mountLayers().catch(e => console.error('[layers]', e)));
 
   safeMount('chat',     () => mountChat());
   safeMount('charts',   () => mountCharts());

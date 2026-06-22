@@ -24,16 +24,13 @@ export function mountViewSwitcher({ getMap } = {}) {
       else panel.setAttribute('hidden', '');
     });
 
-    // El mapa de Leaflet necesita un invalidateSize cuando vuelve a ser visible
     if (view === 'mapa' && typeof getMap === 'function') {
       const map = getMap();
       if (map && typeof map.invalidateSize === 'function') {
-        // siguiente tick: el panel ya está visible
         setTimeout(() => map.invalidateSize(), 0);
       }
     }
 
-    // Notificar al resto de la app
     document.dispatchEvent(new CustomEvent('poview:viewchange', { detail: { view } }));
   }
 
@@ -41,6 +38,5 @@ export function mountViewSwitcher({ getMap } = {}) {
     btn.addEventListener('click', () => setView(btn.dataset.view));
   });
 
-  // Exponer por si alguien quiere cambiar vista programáticamente
   return { setView };
 }

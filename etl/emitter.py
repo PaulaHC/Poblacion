@@ -19,7 +19,6 @@ INFLUX_BUCKET = os.getenv("INFLUXDB_BUCKET", "")
 
 
 def _parse_periodo(periodo) -> datetime.datetime | None:
-    """Convierte un periodo (año entero o str ISO) a datetime UTC."""
     if periodo is None:
         return None
     s = str(periodo).strip()
@@ -38,7 +37,6 @@ def _parse_periodo(periodo) -> datetime.datetime | None:
 
 
 def _build_point(categoria: str, subgrupo: str, tabla: str, r: dict) -> Point | None:
-    """Construye un Point a partir de un registro transformado."""
     dt = _parse_periodo(r.get("periodo"))
     if dt is None:
         return None
@@ -71,11 +69,7 @@ def _build_point(categoria: str, subgrupo: str, tabla: str, r: dict) -> Point | 
 
 
 def emitir_metricas(categoria: str, subgrupo: str, tabla: str, registros: Iterable[dict]) -> int:
-    """
-    Escribe los registros directamente en InfluxDB.
 
-    Devuelve el número de puntos escritos.
-    """
     if not INFLUX_TOKEN or not INFLUX_ORG or not INFLUX_BUCKET:
         raise RuntimeError(
             "Faltan variables de entorno INFLUXDB_TOKEN / INFLUXDB_ORG / INFLUXDB_BUCKET"

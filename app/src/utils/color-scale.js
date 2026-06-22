@@ -45,3 +45,20 @@ export function legendRanges(scale, formatter = (x) => x) {
   }
   return ranges;
 }
+export function sizeScale(values, [rMin, rMax] = [4, 20]) {
+  const clean = values.filter(v => v != null && !Number.isNaN(v)).sort((a, b) => a - b);
+  if (clean.length === 0) {
+    return { radius: () => rMin, min: null, max: null };
+  }
+  const min = clean[0];
+  const max = clean[clean.length - 1];
+  const span = max - min;
+
+  function radius(v) {
+    if (v == null || Number.isNaN(v)) return rMin;
+    if (span <= 0) return (rMin + rMax) / 2;
+    const t = Math.max(0, Math.min(1, (v - min) / span));
+    return rMin + (rMax - rMin) * Math.sqrt(t);
+  }
+  return { radius, min, max };
+}

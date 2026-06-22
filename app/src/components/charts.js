@@ -11,13 +11,10 @@ const COLORS = {
   bar2:    '#94A3B8',
   up:      '#16A34A',
   down:    '#DC2626',
-  // Paleta para "España vaciada":
-  //   - municipios (izquierda): gama tierra → ocre, evoca lo rural
-  //   - población  (derecha):   azul, evoca lo urbano / concentrado
-  empty:   '#B45309',  // ámbar oscuro
-  emptyL:  '#FCD34D',  // ámbar claro
-  full:    '#1E3A8A',  // azul oscuro
-  fullL:   '#93C5FD',  // azul claro
+  empty:   '#B45309',  
+  emptyL:  '#FCD34D',  
+  full:    '#1E3A8A',  
+  fullL:   '#93C5FD', 
 };
 
 const charts = {
@@ -64,7 +61,6 @@ export function mountCharts() {
     });
   });
 
-  // Reaccionar a cambios de filtros
   const refresh = debounce(loadAndRender, 250);
   subscribe(refresh);
 
@@ -223,17 +219,7 @@ function renderRank() {
   });
 }
 
-/* ---------------- 3. España vaciada (sustituye "Distribución por tamaño") ----
- *
- *  Pirámide divergente que enfrenta, para cada banda de tamaño municipal,
- *  el % de MUNICIPIOS (izquierda) y el % de POBLACIÓN (derecha).
- *  La paradoja salta a la vista: los municipios pequeños son la mayoría
- *  pero apenas representan habitantes; los pocos grandes concentran al país.
- *
- *  Las bandas siguen el lenguaje habitual de despoblación:
- *    - "España vacía" oficial: < 1 000 hab.
- *    - "España rural": < 5 000 hab.
- * ---------------------------------------------------------------------- */
+
 const BANDS = [
   { label: '< 100',         min: 0,      max: 100,     vaciada: true  },
   { label: '100 – 500',     min: 100,    max: 500,     vaciada: true  },
@@ -267,18 +253,13 @@ function renderEmptySpain() {
     return;
   }
 
-  // Porcentajes; los del lado "municipios" van en negativo para que
-  // ECharts los dibuje a la izquierda del eje vertical.
   const pctMunis  = counts.map(c => -(c / totalMunis * 100));
   const pctPob    = sums.map(s   =>  s / totalPob   * 100);
   const labels    = BANDS.map(b => b.label);
 
-  // Resaltamos las bandas que pertenecen a la "España vaciada" (< 1000 hab)
-  // con un tono más cálido.
   const munisColors = BANDS.map(b => b.vaciada ? COLORS.empty : COLORS.emptyL);
   const pobColors   = BANDS.map(b => b.vaciada ? COLORS.fullL : COLORS.full);
 
-  // Métrica destacada: % de municipios vaciados vs % de población que albergan
   const vaciadosIdx = BANDS.map((b, i) => b.vaciada ? i : -1).filter(i => i >= 0);
   const munisVaciados = vaciadosIdx.reduce((a, i) => a + counts[i], 0);
   const pobVaciada    = vaciadosIdx.reduce((a, i) => a + sums[i],   0);
@@ -411,7 +392,6 @@ function updateMeta(s) {
   else if (s.comunidad) scope = s.comunidad;
   el.textContent = `Población por sexo · ${scope} · 1996–${s.anio}`;
 
-  // También actualizamos el subtítulo de la tarjeta de "España vaciada"
   const bandsMeta = document.querySelector('#view-graficos .card--wide .card__meta');
   if (bandsMeta) {
     bandsMeta.textContent = 'Municipios vs. población que albergan, por tamaño · ' + scope;

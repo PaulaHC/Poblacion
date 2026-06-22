@@ -69,9 +69,6 @@ function renderKpis(d, s) {
         ? 'menos hombres que mujeres'
         : 'más hombres que mujeres');
 
-  // KPI nuevo: municipios en regresión (sustituye a "Densidad" que mostraba N/D)
-  // - Cuántos municipios del ámbito perdieron población respecto al año anterior
-  // - Coloreado en rojo si > 50 %  (mayoría del territorio retrocede)
   let regrCls   = '';
   let regrValue = '—';
   let regrHint  = 'sin datos comparables';
@@ -82,8 +79,7 @@ function renderKpis(d, s) {
     regrHint = `${formatCompact(d.municipios_regresion)} de ` +
                `${formatCompact(d.municipios_comparables)} pierden población`;
   }
-  // En vista de un único municipio el porcentaje pierde sentido (es 0% o 100%);
-  // lo mostramos como ↓ o ↑ con el dato comparativo.
+
   if (s.municipio) {
     if (d.delta == null) {
       regrValue = '—';

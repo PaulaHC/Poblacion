@@ -24,20 +24,7 @@ export function fetchProvincias(comunidad) {
     return [];
   });
 }
-
-/**
- * Lista de municipios para los selects.
- * Permite ámbito provincia, comunidad, ambos o ninguno.
- * Opcionalmente acepta un término de búsqueda (q) para reducir el payload
- * cuando el ámbito es muy amplio (toda España, una comunidad grande...).
- *
- *   fetchMunicipios({ provincia: '28' })          → todos los de Madrid
- *   fetchMunicipios({ comunidad: 'Castilla y León' })
- *   fetchMunicipios({ q: 'valla' })               → busca por nombre
- *   fetchMunicipios()                              → todos (cuidado: ~8000)
- */
 export function fetchMunicipios(opts = {}) {
-  // Compatibilidad con la firma anterior fetchMunicipios('28')
   if (typeof opts === 'string') opts = { provincia: opts };
   const { provincia, comunidad, q, limit } = opts;
   return getJson('/municipios', { provincia, comunidad, q, limit }).catch(err => {

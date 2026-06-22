@@ -1,5 +1,3 @@
-# Imagen ligera para servir la SPA en desarrollo / preview.
-# Sustituye por nginx + build estático cuando vayas a producción.
 FROM node:20-alpine
 
 WORKDIR /app

@@ -3,20 +3,8 @@ import { debounce } from '../utils/debounce.js';
 import { escapeHtml, escapeAttr } from '../utils/html.js';
 import { fetchComunidades, fetchProvincias, fetchMunicipios } from '../api/influx.js';
 
-/* -----------------------------------------------------------
- *  Municipio: combobox con autocompletado
- * -----------------------------------------------------------
- *  El HTML original contiene <select id="f-municipio">. Lo dejamos
- *  oculto en el DOM (sigue siendo la "fuente de verdad" para el
- *  estado seleccionado) y, justo a su lado, montamos un input + datalist.
- *  Así obtenemos:
- *    - búsqueda por texto (clave cuando hay 8 000+ municipios),
- *    - compatibilidad con el resto del código que ya consulta
- *      f-municipio.value vía syncUiFromState.
- * --------------------------------------------------------- */
 
-// caché en memoria para no machacar el endpoint en cada tecla
-const muniCache = new Map(); // key = JSON({prov, ccaa, q}) → array
+const muniCache = new Map();
 async function fetchMunicipiosCached(opts) {
   const key = JSON.stringify({
     p: opts.provincia || '',
@@ -29,26 +17,29 @@ async function fetchMunicipiosCached(opts) {
   return data;
 }
 
-// Catálogo "vivo" del último listado pintado en el datalist; lo usamos
-// para resolver, al elegir, el cod_provincia y la comunidad del municipio.
-let muniCatalog = []; // [{ id, nombre, cod_provincia, provincia, comunidad }]
+let muniCatalog = [];
 
 export async function mountFilters() {
   const elComunidad = document.getElementById('f-comunidad');
   const elProvincia = document.getElementById('f-provincia');
   const elMunicipio = document.getElementById('f-municipio');
   const elAnio      = document.getElementById('f-anio');
-  const elAnioOut   = document.getElementById('f-anio-out');
   const sexoInputs  = document.querySelectorAll('input[name="sexo"]');
 
-  // --- Montaje del combobox de municipio sobre el <select> ---
-  // Ocultamos el select (sin quitarlo: el resto del código lee su value)
+  const ANIO_MAX = 2025;
+  const ANIO_MIN = 1996;
+  if (elAnio && !elAnio.options.length) {
+    const anioActual = getState().anio || ANIO_MAX;
+    const opts = [];
+    for (let y = ANIO_MAX; y >= ANIO_MIN; y--) {
+      opts.push(`<option value="${y}"${y === anioActual ? ' selected' : ''}>${y}</option>`);
+    }
+    elAnio.innerHTML = opts.join('');
+  }
+
   elMunicipio.style.display = 'none';
 
-  // El <select> está dentro de un <label class="field">. Si dejamos el combo
-  // dentro de ese label, los clicks en la lista hacen que el label intente
-  // enfocar el control (el select), cerrando el desplegable. Lo extraemos
-  // a un contenedor neutral, justo detrás del label.
+
   const fieldLabel = elMunicipio.closest('label');
   const muniBox = document.createElement('div');
   muniBox.className = 'muni-combo';
@@ -82,7 +73,6 @@ export async function mountFilters() {
   const muniHint  = muniBox.querySelector('#f-municipio-hint');
   const muniClear = muniBox.querySelector('#f-municipio-clear');
 
-  // Mientras carga, los selects deben mostrarse como bloqueados
   setLoading(elComunidad, true,  'Cargando…');
   setLoading(elProvincia, true,  'Cargando…');
   muniInput.disabled = true;
@@ -112,7 +102,6 @@ export async function mountFilters() {
   /* ---- UI -> Store ---- */
   elComunidad.addEventListener('change', async (e) => {
     const value = e.target.value || null;
-    // Limpiar provincia y municipio: el cambio de ámbito invalida el contexto.
     setState({ comunidad: value, provincia: null, municipio: null });
     clearMuniInput();
     muniCatalog = [];
@@ -122,8 +111,7 @@ export async function mountFilters() {
     populateSelect(elProvincia, provs, 'Todas');
     elProvincia.disabled = provs.length === 0;
 
-    // Si hay comunidad seleccionada, precargamos la lista de municipios
-    // (puede ser grande, pero el combobox la filtra por texto).
+
     refreshMuniHint();
   });
 
@@ -136,13 +124,9 @@ export async function mountFilters() {
   });
 
   /* ---- Combobox de municipio ---- */
-  // Buscar mientras se escribe (debounced)
   const onType = debounce(async () => {
     const q = muniInput.value.trim();
     const s = getState();
-    // Reglas:
-    //   - si hay provincia, listamos todos los de la provincia (sin q).
-    //   - si no, requerimos al menos 2 letras para no descargar todo.
     if (!s.provincia && q.length < 2) {
       hideList();
       refreshMuniHint();
@@ -152,10 +136,15 @@ export async function mountFilters() {
     if (!s.provincia) opts.q = q;
     const items = await fetchMunicipiosCached(opts);
     muniCatalog = items;
-    // En modo provincia filtramos en cliente por la cadena tecleada
-    const visible = s.provincia && q
-      ? items.filter(it => normalize(it.nombre).includes(normalize(q)))
-      : items;
+    const visible = (
+      s.provincia && q
+        ? items.filter(it => normalize(it.nombre).includes(normalize(q)))
+        : items
+    ).sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', {
+        sensitivity: 'base'
+      })
+    );
     renderList(visible.slice(0, 100), q);
     muniHint.textContent = items.length > 100
       ? `${items.length} resultados · mostrando 100`
@@ -170,7 +159,6 @@ export async function mountFilters() {
     if (muniInput.value || getState().provincia) onType();
   });
   muniInput.addEventListener('blur', () => {
-    // pequeño delay para permitir click sobre la lista
     setTimeout(hideList, 150);
   });
   muniInput.addEventListener('keydown', (e) => {
@@ -191,12 +179,7 @@ export async function mountFilters() {
   });
 
   /* ---- Año y sexo ---- */
-  const debouncedAnio = debounce((v) => setState({ anio: Number(v) }), 300);
-  elAnio.addEventListener('input', (e) => {
-    const v = e.target.value;
-    elAnioOut.textContent = v;
-    debouncedAnio(v);
-  });
+  elAnio.addEventListener('change', (e) => setState({ anio: Number(e.target.value) }));
 
   sexoInputs.forEach(inp => {
     inp.addEventListener('change', (e) => {
@@ -227,10 +210,8 @@ export async function mountFilters() {
       }).join('');
     }
     muniList.hidden = false;
-    // delegación de click
     muniList.querySelectorAll('.muni-combo__item').forEach(el => {
       el.addEventListener('mousedown', (ev) => {
-        // mousedown en vez de click para anticipar al blur del input
         ev.preventDefault();
         const cod  = el.dataset.cod;
         const prov = el.dataset.prov || null;
@@ -241,7 +222,6 @@ export async function mountFilters() {
         muniClear.hidden = false;
         hideList();
 
-        // Si el usuario buscó "suelto" (sin provincia previa), autocompletamos.
         const patch = { municipio: cod };
         const s = getState();
         if (prov && !s.provincia) patch.provincia = prov;
@@ -268,8 +248,6 @@ export async function mountFilters() {
 
   async function syncUiFromState(s) {
     if (elComunidad.value !== (s.comunidad || '')) {
-      // Si el cambio viene del store y la opción no estaba aún cargada
-      // (caso de seleccionar municipio "suelto"), recargamos provincias.
       if (s.comunidad && !hasOption(elComunidad, s.comunidad)) {
         const ccaas = await fetchComunidades();
         populateSelect(elComunidad, ccaas, 'Todas');
@@ -286,7 +264,6 @@ export async function mountFilters() {
       elProvincia.value = s.provincia || '';
     }
 
-    // Mantener el <select> oculto sincronizado para no romper el resto del código
     if (elMunicipio.value !== (s.municipio || '')) {
       // garantizar que exista la option
       if (s.municipio && !hasOption(elMunicipio, s.municipio)) {
@@ -302,8 +279,7 @@ export async function mountFilters() {
     }
 
     if (elAnio.value !== String(s.anio)) {
-      elAnio.value = s.anio;
-      elAnioOut.textContent = s.anio;
+      elAnio.value = String(s.anio);
     }
     sexoInputs.forEach(inp => { inp.checked = (inp.value === s.sexo); });
     refreshMuniHint();
@@ -315,10 +291,18 @@ export async function mountFilters() {
  * --------------------------------------------------------- */
 function populateSelect(select, items, emptyLabel) {
   const current = select.value;
+
+  const sortedItems = [...items].sort((a, b) =>
+    a.nombre.localeCompare(b.nombre, 'es', {
+      sensitivity: 'base'
+    })
+  );
+
   select.innerHTML = `<option value="">${escapeHtml(emptyLabel)}</option>` +
-    items.map(it =>
+    sortedItems.map(it =>
       `<option value="${escapeAttr(it.id)}">${escapeHtml(it.nombre)}</option>`
     ).join('');
+
   if (current && [...select.options].some(o => o.value === current)) {
     select.value = current;
   }

@@ -1,11 +1,11 @@
-import { MAP_CONFIG, RAMP_POBLACION } from '../config.js';
+import { MAP_CONFIG, RAMP_POBLACION, PANE_ZINDEX } from '../config.js';
 import { loadGeoJson } from '../api/geo.js';
 import { fetchValoresMapa, fetchProvincias } from '../api/influx.js';
 import { getState, setState, subscribe } from '../state/store.js';
 import { quantileScale, legendRanges } from '../utils/color-scale.js';
 import { formatCompact } from '../utils/format.js';
 import { escapeHtml } from '../utils/html.js';
-import { renderLegend } from './legend.js';
+import { renderLegendBlock, removeLegendBlock } from './legend.js';
 
 const SEXO_LABELS = { total: 'Total', hombres: 'Hombres', mujeres: 'Mujeres' };
 
@@ -15,6 +15,7 @@ const STYLE = {
   outOfScope: { weight: 0.15, color: '#cbd5e1', fillColor: '#94a3b8', fillOpacity: 0.05 },
   focused:    { weight: 2.2,  color: '#0F172A', fillOpacity: 0.95 },
   hover:      { weight: 1.5,  color: '#0F172A' },
+  hidden:     { weight: 0,    fillOpacity: 0.0, opacity: 0.0 },
 };
 
 const state = {
@@ -22,14 +23,17 @@ const state = {
   layer: null,
   geo: null,
   byCode: new Map(),
+  centroids: new Map(),
   values: {},
   scale: null,
   provinciasPorCcaa: new Map(),
+  baseVisible: true,
 };
 
 let lastScopeKey = null;
 let lastFocus    = null;
 let bootstrapPromise = null;
+let tooltipProvider = null;
 
 /* ============================================================
    API pública
@@ -41,7 +45,15 @@ export function createMap(container) {
     minZoom: MAP_CONFIG.minZoom,
     maxZoom: MAP_CONFIG.maxZoom,
     zoomControl: true,
+    preferCanvas: true,
   });
+
+  for (const [name, z] of Object.entries(PANE_ZINDEX)) {
+    state.map.createPane(`pane-${name}`);
+    const pane = state.map.getPane(`pane-${name}`);
+    pane.style.zIndex = String(z);
+    if (name !== 'poblacion') pane.style.pointerEvents = 'none';
+  }
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -66,13 +78,15 @@ async function bootstrap() {
   state.geo = geo;
 
   state.layer = L.geoJSON(geo, {
+    pane: 'pane-poblacion',
     style: STYLE.noData,
     onEachFeature: (feature, layer) => {
       const code = getMuniCode(feature);
       if (code) state.byCode.set(code, { feature, layer });
       bindInteractions(feature, layer);
     },
-  }).addTo(state.map);
+  });
+  state.layer.addTo(state.map);
 
   await refresh();
 }
@@ -81,8 +95,6 @@ async function bootstrap() {
    Reacción a cambios de estado
    ============================================================ */
 async function onStateChange(s) {
-  // Si llegan cambios antes de que la geometría esté lista,
-  // esperamos a que termine bootstrap. Si bootstrap falló, salimos.
   if (!state.geo) {
     if (bootstrapPromise) await bootstrapPromise;
     if (!state.geo) return;
@@ -132,6 +144,12 @@ async function refresh() {
 function applyStyles() {
   if (!state.byCode.size) return;
   const s = getState();
+
+  if (!state.baseVisible) {
+    state.byCode.forEach(({ layer }) => layer.setStyle(STYLE.hidden));
+    return;
+  }
+
   const focusedCode = s.municipio || null;
   const hasScope = Boolean(s.comunidad || s.provincia);
   const color = (v) => state.scale ? state.scale.color(v) : '#cbd5e1';
@@ -197,21 +215,34 @@ function bindInteractions(feature, layer) {
 }
 
 /* ============================================================
-   Tooltip
+   Tooltip dinámico: muestra solo los modos activos en ese momento
    ============================================================ */
 function tooltipHtml(feature) {
   const code = getMuniCode(feature);
   const name = getMuniName(feature);
-  const v    = state.values[code];
-  const sexo = SEXO_LABELS[getState().sexo] || 'Total';
+  const rows = [];
 
-  const valueStr = (typeof v === 'number')
-    ? `<strong>${formatCompact(v)}</strong> hab. (${sexo})`
-    : `<em style="opacity:.7">sin dato</em>`;
+  if (state.baseVisible) {
+    const v = state.values[code];
+    const sexo = SEXO_LABELS[getState().sexo] || 'Total';
+    const val = (typeof v === 'number')
+      ? `<strong>${formatCompact(v)}</strong> hab.`
+      : '<em style="opacity:.7">sin dato</em>';
+    rows.push(`<span class="tt-dot" style="background:#1E3A8A"></span>Población (${escapeHtml(sexo)}): ${val}`);
+  }
 
-  return `<div style="line-height:1.35">
-    <div><strong>${escapeHtml(name)}</strong></div>
-    <div>${valueStr}</div>
+  if (tooltipProvider) {
+    for (const r of tooltipProvider(code)) {
+      rows.push(`<span class="tt-dot" style="background:${escapeHtml(r.color)}"></span>` +
+                `${escapeHtml(r.label)}: <strong>${escapeHtml(r.valueStr)}</strong>`);
+    }
+  }
+
+  if (!rows.length) rows.push('<em style="opacity:.7">ninguna capa activa</em>');
+
+  return `<div style="line-height:1.55">
+    <div style="margin-bottom:2px"><strong>${escapeHtml(name)}</strong></div>
+    ${rows.map(r => `<div>${r}</div>`).join('')}
   </div>`;
 }
 
@@ -303,8 +334,12 @@ function fitToFeatures(features, opts) {
 function updateLegend() {
   const el = document.getElementById('map-legend');
   if (!el) return;
+  if (!state.baseVisible) {
+    removeLegendBlock(el, 'legend-poblacion');
+    return;
+  }
   const ranges = state.scale ? legendRanges(state.scale, formatCompact) : [];
-  renderLegend(el, {
+  renderLegendBlock(el, 'legend-poblacion', {
     title: `Población · ${SEXO_LABELS[getState().sexo] || 'Total'}`,
     ranges,
   });
@@ -339,4 +374,44 @@ function getMuniCode(f) {
 function getMuniName(f) {
   const p = f.properties || {};
   return p.nombre || p.NAMEUNIT || p.name || 'Sin nombre';
+}
+
+export function whenMapReady() {
+  return bootstrapPromise || Promise.resolve();
+}
+
+export function getMapInstance() {
+  return state.map;
+}
+
+export function getCentroid(code) {
+  if (state.centroids.has(code)) return state.centroids.get(code);
+  const entry = state.byCode.get(code);
+  if (!entry) return null;
+  const c = entry.layer.getBounds().getCenter();
+  const latlng = [c.lat, c.lng];
+  state.centroids.set(code, latlng);
+  return latlng;
+}
+
+export function isCodeInScope(code) {
+  const entry = state.byCode.get(code);
+  if (!entry) return false;
+  return isInScope(entry.feature, getState());
+}
+
+export function setBaseVisible(visible) {
+  state.baseVisible = Boolean(visible);
+  applyStyles();
+  updateLegend();
+}
+
+
+export function setTooltipProvider(fn) {
+  tooltipProvider = fn;
+}
+
+export function getMuniNameByCode(code) {
+  const entry = state.byCode.get(code);
+  return entry ? getMuniName(entry.feature) : code;
 }
