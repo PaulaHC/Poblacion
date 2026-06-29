@@ -2,8 +2,6 @@ import 'leaflet/dist/leaflet.css';
 import * as L      from 'leaflet';
 import * as echarts from 'echarts';
 
-// El resto del código sigue usando L / echarts como globales (mapa, charts).
-// Mantenemos los globales para no tocar map.js / charts.js.
 window.L       = L;
 window.echarts = echarts;
 

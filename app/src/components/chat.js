@@ -1,5 +1,12 @@
 import { API_BASE } from '../config.js';
 
+// Identificador de conversación: uno por carga de página. El backend lo usa
+// como thread_id de LangGraph para mantener la memoria entre turnos.
+const THREAD_ID =
+  (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+
 export function mountChat() {
   const messages = document.getElementById('chat-messages');
   const form     = document.getElementById('chat-form');
@@ -35,7 +42,7 @@ export function mountChat() {
       const res = await fetch(`${API_BASE}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ message: text, thread_id: THREAD_ID }),
       });
       if (!res.ok) throw new Error('chat ' + res.status);
       const data = await res.json();

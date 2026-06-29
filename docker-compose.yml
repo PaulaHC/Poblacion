@@ -65,29 +65,33 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: backend
-    ports:
-      - "8000:8000"
+    # Sin puertos al host: el backend solo es accesible por la red interna
+    # y a través del proxy HTTPS (https://localhost/api).
+    expose:
+      - "8000"
     environment:
       INFLUXDB_URL: http://influxdb:8086
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
       INFLUXDB_ORG: ${INFLUXDB_ORG}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
-      OLLAMA_URL: http://ollama:11434 
+      OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:8b}
+      # Solo aceptamos peticiones del origen HTTPS servido por el proxy.
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost}
     depends_on:
       - influxdb
       - ollama
     restart: unless-stopped
     logging: *default-logging
 
-
   app:
     build:
       context: ./app
       dockerfile: Dockerfile
     container_name: poblacion-app
-    ports:
-      - "8080:3000"
+    # Sin puertos al host: se sirve exclusivamente vía proxy HTTPS.
+    expose:
+      - "3000"
     environment:
       VITE_BACKEND: http://backend:8000
       VITE_API_URL: /api
@@ -98,7 +102,26 @@ services:
     restart: unless-stopped
     logging: *default-logging
 
+  # Proxy inverso: termina TLS y es la ÚNICA puerta de entrada (HTTPS).
+  proxy:
+    image: caddy:2-alpine
+    container_name: proxy
+    ports:
+      - "80:80"     # redirección 80 -> 443 que hace Caddy automáticamente
+      - "443:443"
+    volumes:
+      - ./proxy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+      - backend
+    restart: unless-stopped
+    logging: *default-logging
+
 volumes:
   influxdb-data:
   influxdb-config:
   ollama-data:
+  caddy-data:
+  caddy-config:

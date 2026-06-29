@@ -515,3 +515,13 @@ select, input { font: inherit; color: inherit; }
 }
 
 .app-header__logo { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: 0 0 auto; display: block; }
+
+.app-version {
+  margin-top: auto;        
+  padding-top: 12px;
+  text-align: right;      
+  font-size: 0.75rem;
+  color: #9ca3af;         
+}
+
+.layout__filters { display: flex; flex-direction: column; }
