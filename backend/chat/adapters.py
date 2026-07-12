@@ -1,86 +1,125 @@
-from difflib import get_close_matches
+import json
 from typing import Optional
 
 from fastapi import HTTPException
 
 import db
-from .domain import Indicator, Place, SECTOR_LABELS, canon_sector
+from .domain import (Indicator, Place, es_total, etiqueta_categoria)
 
 
 _SEXO_AGREGADO_REGEX = r"/^(Total|Ambos sexos|Ambos)$/"
 
 
+def _cols(nombres: list[str]) -> str:
+    """Serializa una lista de columnas para Flux: ['a','b'] -> '[\"a\",\"b\"]'."""
+    return json.dumps(nombres)
+
+
 class InfluxStats:
+    """Construcción de Flux + ejecución. Todo determinista, sin LLM."""
 
-    # -- Resolución de lugares --------------------------------------
-    def resolve_place(self, name: str) -> Optional[Place]:
-        if not name:
-            return None
-        objetivo = db.normaliza(name)
-
-        idx_prov = {db.normaliza(p["nombre"]): p for p in db._provincias()}
-        m = get_close_matches(objetivo, list(idx_prov.keys()), n=1, cutoff=0.82)
-        if m:
-            p = idx_prov[m[0]]
-            return Place(nivel="provincia", cod=p["id"], nombre=p["nombre"])
-
-        idx_mun = {db.normaliza(mu["nombre"]): mu for mu in db._municipios()}
-        m = get_close_matches(objetivo, list(idx_mun.keys()), n=1, cutoff=0.82)
-        if m:
-            mu = idx_mun[m[0]]
-            return Place(nivel="municipio", cod=mu["id"], nombre=mu["nombre"])
-
-        return None
-
-    # -- Consultas de datos -----------------------------------------
-    def fetch_value(self, indicator: Indicator, *,
-                    place: Optional[Place], year: int) -> list[float]:
-        flux, params = self._build_flux(indicator, place=place, year=year, modo="valor")
-        filas = self._run(flux, params)
-        return [float(f["_value"]) for f in filas if f.get("_value") is not None]
-
-    def fetch_ranking(self, indicator: Indicator, *,
-                      place: Optional[Place], year: int,
-                      order: str) -> list[tuple[str, float]]:
+    # -- Valor simple (una cifra) -----------------------------------
+    def consultar(self, indicator: Indicator, *, place: Optional[Place] = None,
+                  modo: str = "valor", orden: str = "desc",
+                  anio: Optional[int] = None) -> list[dict]:
+        """Filas normalizadas para tools.py: [{"valor","nombre","anio"}, ...].
+        En modo 'valor' AGREGA según el indicador (población suma sus municipios;
+        renta/esperanza/edad promedian). En 'ranking' devuelve una fila por entidad."""
+        year = anio or db.DEFAULT_ANIO
         flux, params = self._build_flux(indicator, place=place, year=year,
-                                        modo="ranking", orden=order)
-        filas = self._run(flux, params)
-        return [(f.get("municipio") or f.get("provincia"), float(f["_value"]))
-                for f in filas if f.get("_value") is not None]
+                                        modo=modo, orden=orden)
+        rows = self._run(flux, params)
 
-    def fetch_trabajo(self, *, place: Optional[Place], year: int,
-                      top: int = 6) -> list[tuple[str, float]]:
-        params: dict = {"bucket": db.INFLUX_BUCKET, "stop": f"{year}-12-31T23:59:59Z"}
+        if modo == "valor":
+            valores = [float(f["_value"]) for f in rows if f.get("_value") is not None]
+            if not valores:
+                return []
+            total = sum(valores) if indicator.agg == "sum" else sum(valores) / len(valores)
+            nombre = place.nombre if place else (
+                rows[0].get("municipio") or rows[0].get("provincia") or rows[0].get("comunidad"))
+            return [{"valor": total, "nombre": nombre, "anio": year}]
+
+        filas = []
+        for f in rows:
+            valor = f.get("_value")
+            if valor is None:
+                continue
+            filas.append({
+                "valor": float(valor),
+                "nombre": f.get("municipio") or f.get("provincia") or f.get("comunidad"),
+                "anio": year,
+            })
+        return filas
+
+    # -- Distribución por categoría (trabajo, estudios, etc.) -------
+    def distribucion(self, indicator: Indicator, *, place: Optional[Place] = None,
+                     anio: Optional[int] = None) -> list[dict]:
+        """Devuelve el reparto por categoría, agregado y sin duplicar sexo/edad:
+        [{"categoria": str, "valor": float}, ...] ordenado de mayor a menor."""
+        year = anio or db.DEFAULT_ANIO
+        tag = indicator.categoria_tag
+        if not tag:
+            return []
+
+        params: dict = {"bucket": db.INFLUX_BUCKET, "subgrupo": indicator.subgrupo,
+                        "stop": f"{year}-12-31T23:59:59Z"}
         scope = ""
         if place:
             col = "cod_municipio" if place.nivel == "municipio" else "cod_provincia"
             scope = f"and r.{col} == ${{cod}}"
             params["cod"] = place.cod
 
+        group_cols = ["cod_municipio", tag]
+        if indicator.por_sexo and tag != "sexo":
+            group_cols.append("sexo")
+        if indicator.grupo_edad and tag != "grupo_edad":
+            group_cols.append("grupo_edad")
+        keep = group_cols + ["_value"]
+
         flux = (
             f"from(bucket: ${{bucket}}) "
             f"|> range(start: 1990-01-01T00:00:00Z, stop: time(v: ${{stop}})) "
             f'|> filter(fn: (r) => r._measurement == "ine_stats" and r._field == "valor" '
-            f'and r.subgrupo == "trabajo" {scope}) '
-            f'|> group(columns: ["cod_municipio", "sector"]) |> last() '
-            f'|> keep(columns: ["sector", "_value"])'
+            f"and r.subgrupo == ${{subgrupo}} {scope}) "
+            f"|> group(columns: {_cols(group_cols)}) |> last() "
+            f"|> keep(columns: {_cols(keep)})"
         )
-        filas = self._run(flux, params)
+        rows = self._run(flux, params)
+        return self._reducir(rows, indicator)
 
-        agg: dict[str, float] = {}
-        for f in filas:
-            clave = canon_sector(f.get("sector") or "")
-            valor = f.get("_value")
-            if clave is None or valor is None:
+    @staticmethod
+    def _reducir(rows: list[dict], indicator: Indicator) -> list[dict]:
+        """Reduce sexo/edad al total (o suma edades si no hay total), excluye la
+        categoría 'Total' y agrega por categoría a través de municipios (suma, o
+        media si el indicador es 'mean', p. ej. tasas de mortalidad)."""
+        tag = indicator.categoria_tag
+
+        if indicator.por_sexo and tag != "sexo":
+            tot = [r for r in rows if es_total(r.get("sexo"))]
+            rows = tot if tot else rows
+        if indicator.grupo_edad and tag != "grupo_edad":
+            tot = [r for r in rows if es_total(r.get("grupo_edad"))]
+            rows = tot if tot else rows
+
+        sumas: dict[str, float] = {}
+        cuentas: dict[str, int] = {}
+        for r in rows:
+            cat = r.get(tag) or ""
+            valor = r.get("_value")
+            if valor is None or es_total(cat):
                 continue
-            agg[clave] = agg.get(clave, 0.0) + float(valor)
+            etiqueta = etiqueta_categoria(indicator, cat)
+            sumas[etiqueta] = sumas.get(etiqueta, 0.0) + float(valor)
+            cuentas[etiqueta] = cuentas.get(etiqueta, 0) + 1
 
-        ordenado = sorted(agg.items(), key=lambda kv: kv[1], reverse=True)
-        return [(SECTOR_LABELS.get(k, k), v) for k, v in ordenado[:top]]
+        media = indicator.agg == "mean"
+        items = [(k, (v / cuentas[k]) if media else v) for k, v in sumas.items()]
+        items.sort(key=lambda kv: kv[1], reverse=True)
+        return [{"categoria": k, "valor": v} for k, v in items]
 
     # -- Detalle Flux -------------------------------------
     @staticmethod
-    def _run(flux: str, params: dict) -> list:
+    def _run(flux: str, params: dict) -> list[dict]:
         try:
             filas = [dict(r.values) for t in db.query(flux, params) for r in t.records]
             db.logger.info("[chat] flux -> %d filas | %s", len(filas), " ".join(flux.split()))

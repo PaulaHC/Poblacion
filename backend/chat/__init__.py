@@ -1,26 +1,17 @@
+"""Composition root del chat. Monta el grafo agéntico y expone responder_chat."""
 from langchain_core.messages import HumanMessage
 
-import db
 from .agent_graph import make_graph
-from .retriever import InfluxRetriever
 
-_GRAPH = make_graph(InfluxRetriever())
+_graph = make_graph()
 
 
-async def responder_chat(message: str, thread_id: str) -> dict:
+async def responder_chat(mensaje: str, thread_id: str) -> dict:
     config = {
         "configurable": {"thread_id": thread_id},
-        "recursion_limit": 25,  
+        "recursion_limit": 8,   # tope de vueltas agente<->herramientas
     }
-    final = await _GRAPH.ainvoke(
-        {"messages": [HumanMessage(content=message)]},
-        config=config,
+    estado = await _graph.ainvoke(
+        {"messages": [HumanMessage(content=mensaje)]}, config
     )
-    msgs = final.get("messages", [])
-    texto = msgs[-1].content if msgs else "(sin respuesta)"
-    lugar = (final.get("intent") or {}).get("lugar")
-    db.logger.debug("[chat] thread=%s -> %s", thread_id, texto)
-    return {"text": texto, "lugar": lugar}
-
-
-__all__ = ["responder_chat"]
+    return {"text": estado["messages"][-1].content}

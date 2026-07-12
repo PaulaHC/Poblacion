@@ -16,7 +16,6 @@ Todo se levanta con **Docker Compose**. Servicios:
 
 | Servicio   | Tecnología                     | Rol                                                        |
 |------------|--------------------------------|------------------------------------------------------------|
-| `proxy`    | Caddy 2                        | Única puerta de entrada. Termina HTTPS (`https://localhost`). |
 | `app`      | Vite + Leaflet + ECharts       | Frontend (mapa, rankings, gráficas, chat).                 |
 | `backend`  | FastAPI + LangGraph            | API REST `/api/*` y agente conversacional.                 |
 | `ollama`   | Ollama (`qwen3:8b`)            | LLM local: clasifica intención y redacta texto.            |
@@ -58,7 +57,7 @@ INFLUXDB_TOKEN=_token_
 OLLAMA_MODEL=qwen3:8b
 
 # (opcional) Orígenes CORS permitidos por el backend
-CORS_ORIGINS=https://localhost
+CORS_ORIGINS=http://localhost:3000
 ```
 
 > El `INFLUXDB_TOKEN` lo usan a la vez InfluxDB (para crear el admin token) y el
@@ -94,26 +93,21 @@ docker compose logs -f backend
 
 Cuando el ETL haya terminado y el modelo esté descargado, abre:
 
-> **https://localhost**
-
-Caddy usa `tls internal`, así que la primera vez el navegador avisará de que la
-CA no es de confianza. Acepta la excepción (o instala la CA raíz de Caddy) para
-quitar el aviso.
-
+> **http://localhost:3000**
 ---
 
 ## 5. Acceso desde un servidor remoto (VS Code Remote-SSH)
 
 Si el stack corre en un servidor remoto (p. ej. `tauro`) y trabajas con
 **VS Code Remote-SSH**, `localhost` en tu navegador apunta a *tu* máquina, no al
-servidor. Reenvía los puertos del proxy en la pestaña **PORTS** de VS Code:
+servidor. Reenvía en la pestaña **PORTS** de VS Code:
 
-- **443** → para acceder a `https://localhost`
-- **80**  → opcional (Caddy redirige 80→443)
+- **3000** → para acceder a `http://localhost:3000` (frontend)
+- **8000** → opcional, para llamar al backend directo (`/api/*`)
 
-Con esos puertos reenviados, `https://localhost` en tu navegador local llega al
-proxy del servidor. No es necesario exponer 8000/3000/8086/11434: el proxy es la
-única entrada.
+Con el 3000 reenviado, `http://localhost:3000` en tu navegador local llega al
+frontend del servidor. Las llamadas a `/api` las reenvía Vite al backend por la
+red interna de Docker, así que no hace falta exponer 8086/11434.
 
 ---
 
@@ -134,7 +128,7 @@ proxy del servidor. No es necesario exponer 8000/3000/8086/11434: el proxy es la
 Ejemplo de chat:
 
 ```bash
-curl -sk https://localhost/api/chat \
+curl -s http://localhost:3000/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"message":"¿Cuántos habitantes tiene Soria?","thread_id":"demo"}'
 ```
