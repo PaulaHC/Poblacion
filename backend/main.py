@@ -6,7 +6,6 @@ from typing import Optional
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-# Primitivas compartidas (cliente Influx, queries, catálogos, normalización).
 from db import (
     DEFAULT_ANIO,
     INFLUX_BUCKET,
@@ -17,7 +16,6 @@ from db import (
     normaliza,
     query,
 )
-# Agente conversacional (LangGraph).
 from chat import responder_chat
 
 logger = logging.getLogger("poview.backend")

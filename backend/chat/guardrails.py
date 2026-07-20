@@ -1,8 +1,4 @@
-"""
-Guardrail numérico: comprueba que las cifras de la respuesta del LLM aparecen en
-lo que devolvieron las herramientas. Si el modelo se inventa un número, se
-sustituye por un aviso seguro. Solo Python.
-"""
+
 import re
 from typing import Optional
 
@@ -12,8 +8,6 @@ _NUM = re.compile(r"\d[\d.,]*\d|\d")
 
 
 def _a_float(token: str) -> Optional[float]:
-    """Distingue separador decimal de miles por el nº de dígitos tras el último
-    separador: 3 dígitos -> miles (16.517 = 16517); si no -> decimal (16.5)."""
     t = token.strip().rstrip(".,")
     if not re.fullmatch(r"\d[\d.,]*", t):
         return None
@@ -28,8 +22,6 @@ def _a_float(token: str) -> Optional[float]:
 
 
 def validar_cifras(messages) -> Optional[AIMessage]:
-    """Devuelve None si la respuesta está bien fundamentada, o un AIMessage de
-    reemplazo si detecta una cifra que no salió de ninguna herramienta."""
     ultimo = messages[-1]
     if not isinstance(ultimo, AIMessage) or not ultimo.content:
         return None

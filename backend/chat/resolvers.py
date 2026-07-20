@@ -1,17 +1,9 @@
-"""
-Resolución difusa de lugares (municipios/provincias) -> Place.
-Reutiliza los catálogos y la normalización de db.py. Solo Python, sin LLM.
-
-El índice normalizado se construye una única vez (primera llamada) y se cachea
-en memoria: las siguientes resoluciones son inmediatas.
-"""
 from difflib import get_close_matches
 from typing import Optional
 
 import db
 from .domain import Place
 
-# nombre_normalizado -> (cod, nombre_oficial). Se construyen una sola vez.
 _PROVINCIAS: dict[str, tuple[str, str]] = {}
 _MUNICIPIOS: dict[str, tuple[str, str]] = {}
 _CLAVES_PROV: list[str] = []
@@ -23,9 +15,9 @@ def _cargar_catalogos() -> None:
     global _CARGADO
     if _CARGADO:
         return
-    for p in db._provincias():                   # [{"id","nombre","comunidad"}, ...]
+    for p in db._provincias():                  
         _PROVINCIAS[db.normaliza(p["nombre"])] = (p["id"], p["nombre"])
-    for m in db._municipios():                   # [{"id","nombre",...}, ...]
+    for m in db._municipios():                   
         _MUNICIPIOS[db.normaliza(m["nombre"])] = (m["id"], m["nombre"])
     _CLAVES_PROV.extend(_PROVINCIAS.keys())
     _MUNICIPIOS_KEYS.extend(_MUNICIPIOS.keys())
@@ -33,7 +25,6 @@ def _cargar_catalogos() -> None:
 
 
 def resolver_lugar(nombre: str) -> Optional[Place]:
-    """Devuelve un Place (provincia primero, luego municipio) o None."""
     if not nombre:
         return None
     _cargar_catalogos()

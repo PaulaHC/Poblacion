@@ -1,15 +1,3 @@
-"""
-Grafo agéntico (nivel 2): un nodo 'agente' (LLM con herramientas) en bucle con
-un nodo 'herramientas', y un guardrail numérico antes de responder.
-
-    START -> agente <-> herramientas
-               |
-               v (sin más tool calls)
-            guardrails -> END
-
-Invariante PoView: el LLM decide qué herramienta usar, pero las cifras y el Flux
-los pone Python (ver tools.py). El modelo nunca emite datos crudos.
-"""
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AnyMessage, SystemMessage
@@ -54,13 +42,11 @@ class AgentState(TypedDict):
     messages: Annotated[list[AnyMessage], add_messages]
 
 
-# El nodo agente conviene que sea el modelo grande: los 8B hacen tool-calling
-# mucho mejor que los 1.7B. Ajusta db.OLLAMA_MODEL a tu variable real.
 _llm = ChatOllama(
     model=db.OLLAMA_MODEL,
     base_url=db.OLLAMA_URL,
     temperature=0,
-    reasoning=False,          # equivale a "think": false (evita timeouts en CPU)
+    reasoning=False,         
     client_kwargs={"timeout": 300},
 ).bind_tools(TOOLS)
 
@@ -82,7 +68,6 @@ def make_graph():
     g.add_node("guardrails", n_guardrails)
 
     g.add_edge(START, "agente")
-    # tools_condition -> 'herramientas' si el LLM pidió tools, o 'guardrails' si no.
     g.add_conditional_edges(
         "agente",
         tools_condition,

@@ -11,20 +11,15 @@ _SEXO_AGREGADO_REGEX = r"/^(Total|Ambos sexos|Ambos)$/"
 
 
 def _cols(nombres: list[str]) -> str:
-    """Serializa una lista de columnas para Flux: ['a','b'] -> '[\"a\",\"b\"]'."""
     return json.dumps(nombres)
 
 
 class InfluxStats:
-    """Construcción de Flux + ejecución. Todo determinista, sin LLM."""
 
     # -- Valor simple (una cifra) -----------------------------------
     def consultar(self, indicator: Indicator, *, place: Optional[Place] = None,
                   modo: str = "valor", orden: str = "desc",
                   anio: Optional[int] = None) -> list[dict]:
-        """Filas normalizadas para tools.py: [{"valor","nombre","anio"}, ...].
-        En modo 'valor' AGREGA según el indicador (población suma sus municipios;
-        renta/esperanza/edad promedian). En 'ranking' devuelve una fila por entidad."""
         year = anio or db.DEFAULT_ANIO
         flux, params = self._build_flux(indicator, place=place, year=year,
                                         modo=modo, orden=orden)
@@ -51,11 +46,8 @@ class InfluxStats:
             })
         return filas
 
-    # -- Distribución por categoría (trabajo, estudios, etc.) -------
     def distribucion(self, indicator: Indicator, *, place: Optional[Place] = None,
                      anio: Optional[int] = None) -> list[dict]:
-        """Devuelve el reparto por categoría, agregado y sin duplicar sexo/edad:
-        [{"categoria": str, "valor": float}, ...] ordenado de mayor a menor."""
         year = anio or db.DEFAULT_ANIO
         tag = indicator.categoria_tag
         if not tag:
@@ -89,9 +81,6 @@ class InfluxStats:
 
     @staticmethod
     def _reducir(rows: list[dict], indicator: Indicator) -> list[dict]:
-        """Reduce sexo/edad al total (o suma edades si no hay total), excluye la
-        categoría 'Total' y agrega por categoría a través de municipios (suma, o
-        media si el indicador es 'mean', p. ej. tasas de mortalidad)."""
         tag = indicator.categoria_tag
 
         if indicator.por_sexo and tag != "sexo":
