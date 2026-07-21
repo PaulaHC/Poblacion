@@ -23,7 +23,7 @@ def _formatear(indicador: Indicator, valor: float) -> str:
 
 @tool
 def obtener_dato(indicador: str, lugar: str, anio: Optional[int] = None) -> dict:
-
+    """Obtiene el valor de un indicador para un lugar y año determinados."""
     clave = resolver_indicador(indicador)
     if clave not in INDICADORES:
         return {"ok": False, "motivo": "indicador_desconocido", "indicador": indicador}
@@ -57,7 +57,7 @@ def hacer_ranking(
     ambito: Optional[str] = None,
     limite: int = 10,
 ) -> dict:
-
+    """Genera un ranking de lugares ordenado por un indicador."""
     clave = resolver_indicador(indicador)
     if clave not in INDICADORES:
         return {"ok": False, "motivo": "indicador_desconocido", "indicador": indicador}
@@ -85,7 +85,7 @@ def hacer_ranking(
 
 @tool
 def ver_distribucion(indicador: str, lugar: str, anio: Optional[int] = None) -> dict:
-
+    """Muestra la distribución por categorías de un indicador."""
     clave = resolver_indicador(indicador)
     if clave not in INDICADORES:
         return {"ok": False, "motivo": "indicador_desconocido", "indicador": indicador}

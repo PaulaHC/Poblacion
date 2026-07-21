@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from typing import Optional
 
@@ -21,7 +23,21 @@ from chat import responder_chat
 logger = logging.getLogger("poview.backend")
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",")]
 
-app = FastAPI(title="Poview backend", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async def _warm():
+        try:
+            from chat.resolvers import _cargar_catalogos
+            await asyncio.to_thread(_cargar_catalogos)
+            logger.info("[warmup] catalogos cargados")
+        except Exception:
+            logger.exception("[warmup] fallo")
+    asyncio.create_task(_warm())
+    yield
+
+
+app = FastAPI(title="Poview backend", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,7 +45,6 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-
 
 # =================================================================
 
@@ -517,7 +532,7 @@ def _agg_provincia(modo: str, rows: list[dict], pesos: dict) -> list[dict]:
     den: dict[str, float] = {}
     for r in rows:
         prov = r["id"][:2]
-        w = pesos.get(r["id"], 0.0) or 1.0  
+        w = pesos.get(r["id"], 0.0) or 1.0
         num[prov] = num.get(prov, 0.0) + r["valor"] * w
         den[prov] = den.get(prov, 0.0) + w
     return [{"id": p, "valor": round(num[p] / den[p], 1)} for p in num if den[p] > 0]
@@ -565,9 +580,8 @@ def capa_tematica(
 
 
 # =================================================================
-# Chat conversacional: delega en el agente LangGraph (ver agent.py).
-# El frontend envía { "message": str, "thread_id": str }. El thread_id
-# identifica la conversación para mantener memoria entre turnos.
+# Chat conversacional: delega en el agente LangGraph.
+# El frontend envía { "message": str, "thread_id": str }.
 # =================================================================
 @app.post("/api/chat")
 async def chat(payload: dict = Body(...)) -> dict:
@@ -579,7 +593,7 @@ async def chat(payload: dict = Body(...)) -> dict:
         return {"text": "Escribe una pregunta para empezar."}
 
     try:
-        return await responder_chat(msg, thread_id)   # <-- await
+        return await responder_chat(msg, thread_id)
     except Exception:
         logger.exception("chat")
         return {"text": "Lo siento, no he podido responder. Inténtalo de nuevo."}

@@ -24,7 +24,7 @@ INFLUX_BUCKET = os.environ.get("INFLUXDB_BUCKET", "poblacion_municipios")
 
 # ---- Configuración de Ollama --------------------------------------
 OLLAMA_URL     = os.environ.get("OLLAMA_URL",     "http://ollama:11434")
-OLLAMA_MODEL   = os.environ.get("OLLAMA_MODEL",   "qwen3:8b")
+OLLAMA_MODEL   = os.environ.get("OLLAMA_MODEL",   "qwen3:1.7b")
 OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "120"))
 
 SEXO_MAP = {"total": "Total", "hombres": "Hombres", "mujeres": "Mujeres"}

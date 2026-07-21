@@ -18,7 +18,7 @@ Todo se levanta con **Docker Compose**. Servicios:
 |------------|--------------------------------|------------------------------------------------------------|
 | `app`      | Vite + Leaflet + ECharts       | Frontend (mapa, rankings, gráficas, chat).                 |
 | `backend`  | FastAPI + LangGraph            | API REST `/api/*` y agente conversacional.                 |
-| `ollama`   | Ollama (`qwen3:8b`)            | LLM local: clasifica intención y redacta texto.            |
+| `ollama`   | Ollama (`qwen3:1.7b`)            | LLM local: clasifica intención y redacta texto.            |
 | `influxdb` | InfluxDB 2.7                   | Almacena las series temporales del INE.                    |
 | `etl`      | Python + cron                  | Descarga, transforma y carga los datos del INE.            |
 
@@ -36,7 +36,7 @@ El flujo de datos del navegador es **dinámico**: el frontend pide cada valor a
 
 - **Docker** y **Docker Compose v2** (`docker compose`, no `docker-compose`).
 - ~8–10 GB de disco libres (imágenes + datos INE + modelo de Ollama).
-- CPU con al menos 8 GB de RAM recomendado (el modelo `qwen3:8b` corre en CPU).
+- CPU con al menos 8 GB de RAM recomendado (el modelo `qwen3:1.7b` corre en CPU).
 - Salida a Internet la primera vez (descarga de imágenes, datos del INE y modelo).
 
 ---
@@ -54,7 +54,7 @@ INFLUXDB_BUCKET=poblacion_municipios
 INFLUXDB_TOKEN=_token_
 
 # Ollama
-OLLAMA_MODEL=qwen3:8b
+OLLAMA_MODEL=qwen3:1.7b
 
 # (opcional) Orígenes CORS permitidos por el backend
 CORS_ORIGINS=http://localhost:3000
@@ -72,9 +72,7 @@ CORS_ORIGINS=http://localhost:3000
 docker compose up -d --build
 
 # 2) Descargar los modelos de Ollama (NO se descargan solos). Tardan unos minutos.
-#    - qwen3:8b   -> redacción del modo conversacional
-#    - qwen3:1.7b -> clasificación rápida de intención (router del chat)
-docker compose exec ollama ollama pull qwen3:8b
+#    - qwen3:1.7b   -> redacción del modo conversacional
 docker compose exec ollama ollama pull qwen3:1.7b
 
 # 3) (Opcional) Forzar la carga inicial de datos del INE.
