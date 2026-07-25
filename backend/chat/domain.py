@@ -61,9 +61,13 @@ def es_total(v: Optional[str]) -> bool:
     return any(t in n for t in _TOTAL_TOKENS)
 
 
+# OJO: no incluir aquí "municipio(s)" ni "provincia(s)": aparecen en frases de
+# cualquier indicador ("renta de los municipios de Soria") y, al ser alias
+# largos, ganarían al indicador real en el fallback por contención.
 _ALIAS_INDICADOR: dict[str, str] = {
-    "poblacion": "poblacion", "municipios": "poblacion", "municipio": "poblacion",
-    "habitantes": "poblacion", "demografia": "poblacion", "padron": "poblacion",
+    "poblacion": "poblacion", "habitantes": "poblacion", "demografia": "poblacion",
+    "padron": "poblacion", "poblado": "poblacion", "poblados": "poblacion",
+    "poblada": "poblacion", "pobladas": "poblacion",
     "renta": "renta", "ingresos": "renta", "renta media": "renta",
     "esperanza_vida": "esperanza_vida", "esperanza de vida": "esperanza_vida",
     "esperanza": "esperanza_vida",

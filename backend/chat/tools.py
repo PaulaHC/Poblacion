@@ -56,8 +56,15 @@ def hacer_ranking(
     orden: Literal["desc", "asc"] = "desc",
     ambito: Optional[str] = None,
     limite: int = 10,
+    nivel: Optional[Literal["municipio", "provincia"]] = None,
+    anio: Optional[int] = None,
 ) -> dict:
-    """Genera un ranking de lugares ordenado por un indicador."""
+    """Genera un ranking de lugares ordenado por un indicador.
+
+    nivel: "municipio" o "provincia". Si no se indica, se rankean municipios
+    cuando el ámbito es una provincia y provincias en caso contrario.
+    anio: año de referencia (por defecto, el más reciente).
+    """
     clave = resolver_indicador(indicador)
     if clave not in INDICADORES:
         return {"ok": False, "motivo": "indicador_desconocido", "indicador": indicador}
@@ -69,7 +76,8 @@ def hacer_ranking(
     if ambito and place is None:
         return {"ok": False, "motivo": "lugar_no_encontrado", "lugar": ambito}
 
-    filas = _stats.consultar(ind, place=place, modo="ranking", orden=_norm_orden(orden))
+    filas = _stats.consultar(ind, place=place, modo="ranking",
+                             orden=_norm_orden(orden), nivel=nivel, anio=anio)
     if not filas:
         return {"ok": False, "motivo": "sin_datos"}
 
@@ -80,6 +88,7 @@ def hacer_ranking(
         if f.get("nombre")
     ]
     return {"ok": True, "indicador": ind.label, "orden": _norm_orden(orden),
+            "anio": filas[0].get("anio"),
             "unidad": ind.unidad, "filas": top}
 
 

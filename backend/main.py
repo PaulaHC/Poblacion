@@ -1,14 +1,15 @@
 import asyncio
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
-from functools import lru_cache
 from typing import Optional
 
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from db import (
+    CACHE_TTL,
     DEFAULT_ANIO,
     INFLUX_BUCKET,
     SEXO_MAP,
@@ -17,6 +18,7 @@ from db import (
     _provincias,
     normaliza,
     query,
+    ttl_cache,
 )
 from chat import responder_chat
 
@@ -27,12 +29,19 @@ CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(","
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async def _warm():
-        try:
-            from chat.resolvers import _cargar_catalogos
-            await asyncio.to_thread(_cargar_catalogos)
-            logger.info("[warmup] catalogos cargados")
-        except Exception:
-            logger.exception("[warmup] fallo")
+        from chat.resolvers import _cargar_catalogos
+        # Influx puede tardar unos segundos en estar listo tras un arranque
+        # completo del stack: se reintenta antes de rendirse. Si aun así
+        # falla, los catálogos se cargarán bajo demanda en la primera consulta.
+        for intento in range(1, 11):
+            try:
+                await asyncio.to_thread(_cargar_catalogos)
+                logger.info("[warmup] catalogos cargados (intento %d)", intento)
+                return
+            except Exception:
+                logger.warning("[warmup] Influx no disponible aún (intento %d/10)", intento)
+                await asyncio.sleep(3)
+        logger.error("[warmup] no se pudo precargar; se cargarán bajo demanda")
     asyncio.create_task(_warm())
     yield
 
@@ -78,7 +87,7 @@ def list_provincias(comunidad: Optional[str] = None) -> list[dict]:
 def list_municipios(
     provincia: Optional[str] = Query(None, min_length=2, max_length=2),
     comunidad: Optional[str] = None,
-    q: Optional[str] = Query(None, description="Búsqueda por prefijo del nombre"),
+    q: Optional[str] = Query(None, description="Búsqueda por subcadena del nombre"),
     limit: int = Query(8000, ge=1, le=20000),
 ) -> list[dict]:
     rows = _municipios(provincia, comunidad)
@@ -368,7 +377,7 @@ def _canon_sector(nombre: str) -> Optional[str]:
     return "otros_servicios"
 
 
-@lru_cache(maxsize=8)
+@ttl_cache(maxsize=8)
 def _poblacion_pesos(anio: int) -> dict:
     """Población total (sexo Total) por municipio, último valor <= año.
     Sirve de peso para las medias a nivel provincial (tasas NUNCA se suman)."""
@@ -395,7 +404,7 @@ def _poblacion_pesos(anio: int) -> dict:
 _CAPA_START = "2000-01-01T00:00:00Z"
 
 
-@lru_cache(maxsize=8)
+@ttl_cache(maxsize=8)
 def _capa_renta_prov(anio: int) -> dict:
     """Renta bruta media por persona (€) por PROVINCIA, último valor <= año.
     Esta serie del INE es provincial (no municipal): la geografía es la
@@ -422,7 +431,7 @@ def _capa_renta_prov(anio: int) -> dict:
     return out
 
 
-@lru_cache(maxsize=8)
+@ttl_cache(maxsize=8)
 def _capa_trabajo_muni(anio: int) -> tuple[dict, ...]:
     params = {"bucket": INFLUX_BUCKET, "start": _CAPA_START,
               "stop": f"{anio}-12-31T23:59:59Z"}
@@ -464,7 +473,7 @@ def _capa_trabajo_muni(anio: int) -> tuple[dict, ...]:
     return tuple(out)
 
 
-@lru_cache(maxsize=8)
+@ttl_cache(maxsize=8)
 def _capa_estudios_muni(anio: int) -> tuple[dict, ...]:
     params = {"bucket": INFLUX_BUCKET, "start": _CAPA_START,
               "stop": f"{anio}-12-31T23:59:59Z"}
@@ -543,7 +552,9 @@ _CAPAS_MUNI = {
     "estudios": _capa_estudios_muni,
 }
 
-_capa_cache: dict[tuple, list[dict]] = {}
+# key -> (timestamp monotonic, filas). Caduca con CACHE_TTL, igual que las
+# funciones ttl_cache, para reflejar la recarga nocturna del ETL.
+_capa_cache: dict[tuple, tuple[float, list[dict]]] = {}
 
 
 @app.get("/api/capa/{modo}")
@@ -558,7 +569,9 @@ def capa_tematica(
 
     nivel = "provincia" if nivel == "provincia" else "municipio"
     key = (modo, anio, nivel)
-    rows = _capa_cache.get(key)
+    ahora = time.monotonic()
+    hit = _capa_cache.get(key)
+    rows = hit[1] if hit and (ahora - hit[0]) < CACHE_TTL else None
     if rows is None:
         if modo == "renta":
             prov_vals = _capa_renta_prov(anio)
@@ -571,7 +584,7 @@ def capa_tematica(
         else:
             muni = _CAPAS_MUNI[modo](anio)
             rows = _agg_provincia(modo, muni, _poblacion_pesos(anio)) if nivel == "provincia" else muni
-        _capa_cache[key] = rows
+        _capa_cache[key] = (ahora, rows)
 
     if nivel == "municipio" and provincia:
         rows = [r for r in rows if r["id"][:2] == provincia]

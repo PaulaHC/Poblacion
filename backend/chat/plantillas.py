@@ -41,8 +41,10 @@ def redactar(msg: ToolMessage) -> Optional[str]:
     unidad = res.get("unidad", "")
     if tool == "obtener_dato":
         u = f" {unidad}" if unidad else ""
-        return (f"La {res['indicador']} de {res['lugar']} en {res['anio']} "
-                f"es de {res['cifra']}{u}.")
+        # Sin articulo delante del indicador: evita discordancias de genero
+        # ("La indicador de fecundidad").
+        return (f"{res['indicador'].capitalize()} de {res['lugar']} "
+                f"en {res['anio']}: {res['cifra']}{u}.")
 
     if tool == "hacer_ranking":
         filas = res.get("filas", [])
@@ -53,8 +55,10 @@ def redactar(msg: ToolMessage) -> Optional[str]:
         otra = "menor" if etiqueta == "mayor" else "mayor"
         lineas = [f"{i}. {f['nombre']}: {f['cifra']}{u}"
                   for i, f in enumerate(filas, 1)]
-        return (f"Ranking por {res['indicador']} (de {etiqueta} a {otra}):\n"
-                + "\n".join(lineas))
+        anio = res.get("anio")
+        en_anio = f" en {anio}" if anio else ""
+        return (f"Ranking por {res['indicador']}{en_anio} "
+                f"(de {etiqueta} a {otra}):\n" + "\n".join(lineas))
 
     if tool == "ver_distribucion":
         mayo = res.get("mayoritaria")

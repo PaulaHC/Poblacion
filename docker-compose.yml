@@ -9,7 +9,9 @@ services:
     image: influxdb:2.7
     container_name: influxdb
     ports:
-      - "8086:8086"
+      # Solo accesible desde el propio servidor (localhost); útil para
+      # depurar o reenviar el puerto con VS Code. No se expone a la red.
+      - "127.0.0.1:8086:8086"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
       interval: 5s
@@ -67,7 +69,7 @@ services:
       dockerfile: Dockerfile
     container_name: backend
     # Sin puertos al host: el backend solo es accesible por la red interna
-    # y a través del proxy HTTPS (https://localhost/api).
+    # de Docker; el frontend le reenvía /api a través del proxy de Vite.
     expose:
       - "8000"
     environment:
@@ -80,8 +82,12 @@ services:
       # Solo aceptamos peticiones del origen HTTPS servido por el proxy.
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     depends_on:
-      - influxdb
-      - ollama
+      # Espera al healthcheck de Influx: evita el "Connection refused" del
+      # warm-up cuando se arranca todo el stack a la vez.
+      influxdb:
+        condition: service_healthy
+      ollama:
+        condition: service_started
     restart: unless-stopped
     logging: *default-logging
 
@@ -97,8 +103,6 @@ services:
         VITE_API_URL: /api
       depends_on:
         - backend
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
       restart: unless-stopped
       logging: *default-logging
 

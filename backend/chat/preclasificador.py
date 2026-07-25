@@ -17,6 +17,8 @@ _ASC = re.compile(r"\b(menos|menor(es)?|m[ií]nim\w+|baj[oa]s?|[uú]ltim)\w*", r
 _ANIO = re.compile(r"\b(19|20)\d{2}\b")
 _LIMITE = re.compile(
     r"\btop\s*(\d{1,2})|\b(\d{1,2})\s+(municipios|provincias|lugares)\b", re.I)
+_NIVEL_MUNI = re.compile(r"\bmunicipi|\bpueblos?\b|\blocalidad", re.I)
+_NIVEL_PROV = re.compile(r"\bprovinci", re.I)
 
 
 def _detectar_lugar(texto_norm: str) -> Optional[str]:
@@ -53,6 +55,12 @@ def preclasificar(texto: str) -> Optional[AIMessage]:
         args = {"indicador": clave, "orden": orden, "limite": limite}
         if lugar:
             args["ambito"] = lugar
+        if _NIVEL_MUNI.search(n):
+            args["nivel"] = "municipio"
+        elif _NIVEL_PROV.search(n):
+            args["nivel"] = "provincia"
+        if anio:
+            args["anio"] = anio
         tool = "hacer_ranking"
     elif lugar:
         args = {"indicador": clave, "lugar": lugar}

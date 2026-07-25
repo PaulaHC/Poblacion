@@ -19,10 +19,21 @@ class InfluxStats:
     # -- Valor simple (una cifra) -----------------------------------
     def consultar(self, indicator: Indicator, *, place: Optional[Place] = None,
                   modo: str = "valor", orden: str = "desc",
-                  anio: Optional[int] = None) -> list[dict]:
+                  anio: Optional[int] = None,
+                  nivel: Optional[str] = None) -> list[dict]:
         year = anio or db.DEFAULT_ANIO
+
+        if modo == "ranking":
+            # La renta del INE es provincial: no cabe ranking municipal.
+            if indicator.subgrupo == "renta":
+                nivel = "provincia"
+            elif nivel not in ("municipio", "provincia"):
+                # Por defecto: dentro de una provincia se rankean municipios;
+                # sin ámbito (o con CCAA), provincias.
+                nivel = "municipio" if (place and place.nivel == "provincia") else "provincia"
+
         flux, params = self._build_flux(indicator, place=place, year=year,
-                                        modo=modo, orden=orden)
+                                        modo=modo, orden=orden, nivel=nivel)
         rows = self._run(flux, params)
 
         if modo == "valor":
@@ -39,9 +50,15 @@ class InfluxStats:
             valor = f.get("_value")
             if valor is None:
                 continue
+            nombre = f.get("municipio") or f.get("provincia") or f.get("comunidad")
+            # En un ranking nacional de municipios, el nombre solo no es único:
+            # se añade la provincia entre paréntesis.
+            if (nivel == "municipio" and place is None
+                    and f.get("municipio") and f.get("provincia")):
+                nombre = f'{f["municipio"]} ({f["provincia"]})'
             filas.append({
                 "valor": float(valor),
-                "nombre": f.get("municipio") or f.get("provincia") or f.get("comunidad"),
+                "nombre": nombre,
                 "anio": year,
             })
         return filas
@@ -120,7 +137,8 @@ class InfluxStats:
 
     @staticmethod
     def _build_flux(indicator: Indicator, *, place: Optional[Place],
-                    year: int, modo: str, orden: str = "desc") -> tuple[str, dict]:
+                    year: int, modo: str, orden: str = "desc",
+                    nivel: Optional[str] = None) -> tuple[str, dict]:
         params: dict = {"bucket": db.INFLUX_BUCKET, "subgrupo": indicator.subgrupo,
                         "stop": f"{year}-12-31T23:59:59Z"}
 
@@ -147,8 +165,13 @@ class InfluxStats:
 
         if modo == "ranking":
             desc = "true" if orden == "desc" else "false"
-            col_group = "municipio" if (place and place.nivel == "provincia") else "provincia"
-            flux = (base + f' |> group(columns:["{col_group}"]) |> {agg}() |> group() '
+            # Se agrupa por CÓDIGO (no solo por nombre) para no fusionar
+            # municipios homónimos de provincias distintas.
+            if nivel == "municipio":
+                cols = '["cod_municipio", "municipio", "provincia"]'
+            else:
+                cols = '["cod_provincia", "provincia"]'
+            flux = (base + f' |> group(columns: {cols}) |> {agg}() |> group() '
                            f'|> sort(columns:["_value"], desc:{desc}) |> limit(n:50)')
         else:
             flux = base + ' |> group()'

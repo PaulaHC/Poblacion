@@ -3,7 +3,7 @@
 Plataforma de **visualización de datos demográficos del INE** y un
 **asistente conversacional** para estudiar la despoblación rural en España.
  Combina un mapa coroplético de los ~8.100 municipios con
-capas temáticas (renta, trabajo, estudios y poblacion) y un chat que
+capas temáticas (renta, trabajo, estudios y población) y un chat que
 responde con cifras reales del INE.
 
 > Trabajo de Fin de Máster (TFM).
@@ -28,7 +28,7 @@ genera queries ni inventa cifras. Si InfluxDB no devuelve datos, el chat
 responde con un texto fijo.
 
 El flujo de datos del navegador es **dinámico**: el frontend pide cada valor a
-`/api/*`, que consulta InfluxDB (y, para el chat, Ollama)..
+`/api/*`, que consulta InfluxDB (y, para el chat, Ollama).
 
 ---
 
@@ -133,7 +133,7 @@ curl -s http://localhost:3000/api/chat \
 
 ---
 
-## 8. Operación y mantenimiento
+## 7. Operación y mantenimiento
 
 **Parar sin perder datos:**
 

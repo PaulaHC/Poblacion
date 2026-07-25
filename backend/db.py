@@ -1,8 +1,9 @@
 import logging
 import os
 import re
+import time
 import unicodedata
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, Optional
 
 import httpx
@@ -30,6 +31,35 @@ OLLAMA_TIMEOUT = float(os.environ.get("OLLAMA_TIMEOUT", "120"))
 SEXO_MAP = {"total": "Total", "hombres": "Hombres", "mujeres": "Mujeres"}
 
 DEFAULT_ANIO = int(os.environ.get("DEFAULT_ANIO", "2025"))
+
+# TTL (segundos) de las cachés en memoria del backend. Debe ser <= a la
+# cadencia del ETL (por defecto diario) para que los datos recién cargados
+# acaben siendo visibles sin reiniciar el contenedor.
+CACHE_TTL = int(os.environ.get("CACHE_TTL", str(24 * 3600)))
+
+
+def ttl_cache(seconds: int = CACHE_TTL, maxsize: int = 8):
+    """`lru_cache` con caducidad: la caché se vacía entera cada `seconds`.
+
+    Motivo: el ETL recarga InfluxDB cada noche; sin TTL, un `lru_cache`
+    normal serviría datos obsoletos hasta reiniciar el backend.
+    """
+    def deco(fn):
+        cached = lru_cache(maxsize=maxsize)(fn)
+        expira = time.monotonic() + seconds
+
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            nonlocal expira
+            ahora = time.monotonic()
+            if ahora >= expira:
+                cached.cache_clear()
+                expira = ahora + seconds
+            return cached(*args, **kwargs)
+
+        wrapper.cache_clear = cached.cache_clear
+        return wrapper
+    return deco
 
 
 @lru_cache(maxsize=1)
@@ -131,7 +161,7 @@ def _provincias(comunidad: Optional[str] = None) -> list[dict]:
     return sorted(seen.values(), key=lambda r: r["nombre"])
 
 
-@lru_cache(maxsize=8)
+@ttl_cache(maxsize=8)
 def _municipios(provincia: Optional[str] = None,
                 comunidad: Optional[str] = None) -> list[dict]:
     extras: list[str] = []
