@@ -11,12 +11,48 @@ const SEXO_LABELS = { total: 'Total', hombres: 'Hombres', mujeres: 'Mujeres' };
 
 const STYLE = {
   filled:     { weight: 0.5,  color: '#ffffff', fillOpacity: 0.85 },
+  // Atenuado: se usa para el resto del mapa cuando hay un municipio enfocado.
   noData:     { weight: 0.3,  color: '#9ca3af', fillColor: '#ffffff', fillOpacity: 0.0 },
+  // Sin dato REAL: entidad visible en gris, identificada en la leyenda.
+  sinDato:    { weight: 0.5,  color: '#9a9a9a', fillColor: '#cfcfcf', fillOpacity: 0.92 },
   outOfScope: { weight: 0.15, color: '#cbd5e1', fillColor: '#94a3b8', fillOpacity: 0.05 },
   focused:    { weight: 2.2,  color: '#0F172A', fillOpacity: 0.95 },
   hover:      { weight: 1.5,  color: '#0F172A' },
   hidden:     { weight: 0,    fillOpacity: 0.0, opacity: 0.0 },
 };
+
+/* Entidades territoriales sin código municipal INE (terrenos mancomunados,
+   comunidades de villa y tierra, ledanías, facerías y Gibraltar). El INE no
+   publica estadísticas para ellas, pero tienen geometría propia en el GeoJSON.
+   Su código no empieza por el código de provincia, así que se mapea a mano
+   para que los filtros por provincia/comunidad las sigan incluyendo. */
+const PROV_SIN_MUNICIPIO = {
+  '53000':'20', '53001':'01', '53002':'01', '53003':'23', '53004':'09', '53005':'09',
+  '53006':'09', '53007':'09', '53008':'09', '53009':'09', '53010':'09', '53011':'09',
+  '53012':'09', '53013':'09', '53014':'09', '53015':'09', '53016':'09', '53017':'09',
+  '53018':'09', '53019':'09', '53020':'09', '53021':'09', '53022':'09', '53023':'09',
+  '53024':'09', '53025':'09', '53026':'09', '53027':'09', '53028':'09', '53029':'09',
+  '53031':'09', '53032':'09', '53033':'09', '53034':'09', '53035':'09', '53036':'09',
+  '53037':'09', '53038':'09', '53039':'09', '53040':'09', '53041':'09', '53042':'09',
+  '53043':'09', '53044':'09', '53045':'09', '53046':'09', '53047':'19', '53048':'20',
+  '53049':'22', '53050':'23', '53051':'24', '53052':'24', '53053':'24', '53054':'24',
+  '53055':'25', '53056':'26', '53057':'28', '53058':'28', '53059':'31', '53060':'31',
+  '53061':'31', '53062':'31', '53063':'31', '53064':'31', '53065':'31', '53066':'31',
+  '53067':'31', '53068':'31', '53069':'31', '53070':'31', '53071':'37', '53072':'39',
+  '53073':'09', '53074':'40', '53075':'42', '53076':'50', '53077':'44', '53078':'31',
+  '53080':'31', '53081':'31', '53083':'31', '54006':'54',
+};
+
+/** Código de provincia de un código de entidad (municipio o mancomunidad). */
+function provinciaDe(code) {
+  const c = String(code || '');
+  return PROV_SIN_MUNICIPIO[c] || c.slice(0, 2);
+}
+
+/** true si la entidad no es un municipio con código INE. */
+function esNoMunicipal(code) {
+  return Object.prototype.hasOwnProperty.call(PROV_SIN_MUNICIPIO, String(code || ''));
+}
 
 const state = {
   map: null,
@@ -79,7 +115,7 @@ async function bootstrap() {
 
   state.layer = L.geoJSON(geo, {
     pane: 'pane-poblacion',
-    style: STYLE.noData,
+    style: STYLE.sinDato,   // por defecto gris visible; applyStyles() repinta
     onEachFeature: (feature, layer) => {
       const code = getMuniCode(feature);
       if (code) state.byCode.set(code, { feature, layer });
@@ -178,7 +214,7 @@ function applyStyles() {
     if (typeof value === 'number') {
       layer.setStyle({ ...STYLE.filled, fillColor: color(value) });
     } else {
-      layer.setStyle(STYLE.noData);
+      layer.setStyle(STYLE.sinDato);
     }
   });
 }
@@ -227,7 +263,7 @@ function tooltipHtml(feature) {
     const sexo = SEXO_LABELS[getState().sexo] || 'Total';
     const val = (typeof v === 'number')
       ? `<strong>${formatCompact(v)}</strong> hab.`
-      : '<em style="opacity:.7">sin dato</em>';
+      : `<em style="opacity:.7">${esNoMunicipal(code) ? 'entidad sin código municipal INE' : 'sin dato'}</em>`;
     rows.push(`<span class="tt-dot" style="background:#1E3A8A"></span>Población (${escapeHtml(sexo)}): ${val}`);
   }
 
@@ -257,13 +293,13 @@ function currentScopeKey(s) {
 
 function isInScope(feature, s) {
   if (s.provincia) {
-    const provCode = String(getMuniCode(feature) || '').slice(0, 2);
+    const provCode = provinciaDe(getMuniCode(feature));
     return provCode === s.provincia;
   }
   if (s.comunidad) {
     const provsCcaa = state.provinciasPorCcaa.get(s.comunidad);
     if (!provsCcaa) return true;
-    const provCode = String(getMuniCode(feature) || '').slice(0, 2);
+    const provCode = provinciaDe(getMuniCode(feature));
     return provsCcaa.has(provCode);
   }
   return true;
@@ -287,10 +323,7 @@ function fitToScope(s) {
   if (s.municipio) return;
 
   if (s.provincia) {
-    const features = state.geo.features.filter(f => {
-      const p = String(getMuniCode(f) || '').slice(0, 2);
-      return p === s.provincia;
-    });
+    const features = state.geo.features.filter(f => provinciaDe(getMuniCode(f)) === s.provincia);
     fitToFeatures(features, { padding: [40, 40], maxZoom: 11 });
     return;
   }
@@ -299,10 +332,7 @@ function fitToScope(s) {
     ensureProvinciasParaCcaa(s.comunidad).then(() => {
       if (!state.geo || !state.geo.features) return;
       const provs = state.provinciasPorCcaa.get(s.comunidad) || new Set();
-      const features = state.geo.features.filter(f => {
-        const p = String(getMuniCode(f) || '').slice(0, 2);
-        return provs.has(p);
-      });
+      const features = state.geo.features.filter(f => provs.has(provinciaDe(getMuniCode(f))));
       fitToFeatures(features, { padding: [40, 40], maxZoom: 9 });
       applyStyles();
     });
@@ -339,6 +369,7 @@ function updateLegend() {
     return;
   }
   const ranges = state.scale ? legendRanges(state.scale, formatCompact) : [];
+  if (ranges.length) ranges.push({ color: STYLE.sinDato.fillColor, label: 'Sin dato' });
   renderLegendBlock(el, 'legend-poblacion', {
     title: `Población · ${SEXO_LABELS[getState().sexo] || 'Total'}`,
     ranges,
@@ -373,7 +404,10 @@ function getMuniCode(f) {
 }
 function getMuniName(f) {
   const p = f.properties || {};
-  return p.nombre || p.NAMEUNIT || p.name || 'Sin nombre';
+  const n = p.nombre || p.NAMEUNIT || p.name || 'Sin nombre';
+  // 7 entidades del origen se nombran con los códigos de los municipios
+  // copropietarios, varios de ellos ya extinguidos. Se muestra genérico.
+  return /\d{5}/.test(n) ? 'Terreno mancomunado' : n;
 }
 
 export function whenMapReady() {
